@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
 The program is running in the background
 Reference: https://askubuntu.com/questions/396654/how-to-run-the-python-program-in-the-background-in-ubuntu-machine
@@ -8,6 +7,9 @@ Binance API URL: https://www.binance.com/restapipub.html
 
 Set shell variables
 https://www.digitalocean.com/community/tutorials/how-to-read-and-set-environmental-and-shell-variables-on-a-linux-vps
+
+How to log From Multiple Modules
+https://www.blog.pythonlibrary.org/2012/08/02/python-101-an-intro-to-logging/
 
 Configure logging to allow change dynamically
 https://docs.python.org/2/howto/logging.html#configuring-logging
@@ -31,16 +33,10 @@ package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, package_path)
 
 # Import your package (if any) below
+from lib import dec
 
 
-# Initialize log
-file = os.path.basename(__file__).split('.')[0]
-file_name = '{}/logs/{}_{}.log'.format(os.path.dirname(os.path.realpath(__file__)), datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''), file)
-log = logging.getLogger(file)
-handler = logging.FileHandler(file_name)
-formatter = logging.Formatter('%(asctime)s %(name)-8s %(threadName)-10s %(levelname)-8s %(message)s')
-handler.setFormatter(formatter)
-log.addHandler(handler)
+log = logging.getLogger(__name__)
 
 
 class Monitor(threading.Thread):
@@ -80,6 +76,7 @@ class Monitor(threading.Thread):
                 log.debug(self.inform_limit)
 
                 # Get new prices
+                log.info('Get price updates')
                 my_tickers_price_history = self.get_prices(self.my_tickers)
                 for t, p in my_tickers_price_history.iteritems():
                     # Convert collections.deque to list
@@ -102,13 +99,13 @@ class Monitor(threading.Thread):
                     # Calculate price fluctuation
                     price_diff = new_price - old_price
                     percent_diff = (new_price / old_price - 1) * 100
-                    message = '{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, inform_limit: {4}%'.format(t, percent_diff, old_price, new_price, self.config['inform_limit'])
-                    log.info(message)
 
-                    if abs(percent_diff) > self.config['inform_limit']:
+                    if abs(percent_diff) > self.inform_limit:
+                        message = '{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, inform_limit: {4}%'.format(t, percent_diff, old_price, new_price, self.config['inform_limit'])
+                        log.info(message)
                         if 'email' in self.config.keys():
                             for email in self.config['email'].split(','):
-                                self.send_email(email.strip(), '{} Update'.format(self.exchange), compose_message(message, t))
+                                self.send_email(email.strip(), '{} Update'.format(self.exchange), self.compose_message(message, t))
 
                         # Clear the ticker prices to start fresh to prevent script from keep sending message
                         self.tickers_price_history[t].clear()
@@ -119,11 +116,11 @@ class Monitor(threading.Thread):
             # the background
             log.exception(e.message)
 
-    #@print_function_name
+    @dec.time_elapsed
     def get_prices(self, my_tickers=None):
         pass
 
-    #@print_function_name
+    @dec.time_elapsed
     def import_config(self, filename):
         # Import config from .ini
         config = {}
@@ -139,40 +136,39 @@ class Monitor(threading.Thread):
                 self.inform_limit = float(config['inform_limit'])
             except ValueError as e:
                 log.warning('Invalid setting, "inform_limit" in {}.ini is not a float!'.format(self.exchange))
-        
+
         # Get logging_level, default is WARNING
         if 'logging_level' in config.keys():
+            # Set logging level for all loggers
+            from lib import all_loggers
             if config['logging_level'].upper() == 'DEBUG':
-                log.setLevel(logging.DEBUG)
+                all_loggers.setLevelToAllLoggers(logging.DEBUG)
             elif config['logging_level'].upper() == 'INFO':
-                log.setLevel(logging.INFO)
+                all_loggers.setLevelToAllLoggers(logging.INFO)
             elif config['logging_level'].upper() == 'WARNING':
-                log.setLevel(logging.WARNING)
+                all_loggers.setLevelToAllLoggers(logging.WARNING)
             elif config['logging_level'].upper() == 'ERROR':
-                log.setLevel(logging.ERROR)
+                all_loggers.setLevelToAllLoggers(logging.ERROR)
             elif config['logging_level'].upper() == 'CRITICAL':
-                log.setLevel(logging.CRITICAL)
+                all_loggers.setLevelToAllLoggers(logging.CRITICAL)
             else:
                 # Set to default level
-                log.setLevel(logging.WARNING)
-        else:
-            # Set to default level
-            log.setLevel(logging.WARNING)
-            
+                all_loggers.setLevelToAllLoggers(logging.WARNING)
+
         # Get my_tickers
         if 'my_tickers' in config.keys():
             if config['my_tickers'] == "":
                 self.my_tickers = None
             else:
                 self.my_tickers = [t.strip() for t in config['my_tickers'].split(',')]
-        
+
         # Get number_of_prices_to_track
         if 'number_of_prices_to_track' in config.keys():
             try:
                 self.number_of_prices_to_track = int(config['number_of_prices_to_track'])
             except ValueError as e:
                 log.warning('Invalid setting, "number_of_prices_to_track" in {}.ini is not an integer!'.format(self.exchange))
-            
+
         # Get wait_before_poll
         if 'wait_before_poll' in config.keys():
             try:
@@ -182,14 +178,20 @@ class Monitor(threading.Thread):
 
         log.debug(config)
         return config
-        
+
+    @dec.time_elapsed
     def compose_message(self, original_message, ticker):
+        '''Compose email message.
+
+        Reserved for child class to implement
+        '''
         pass
-        
-    #@print_function_name
+
+    @dec.time_elapsed
     def send_email(self, to, subject, message):
         try:
-            # Gmail authentication
+            # Get gmail authentication from environmental variables
+            # Make sure to set GMAIL and GMAIL_PASS in the .bashrc
             email = os.environ['GMAIL']
             password = os.environ['GMAIL_PASS']
 
@@ -212,7 +214,7 @@ class Monitor(threading.Thread):
             server.sendmail(msg['From'], msg['to'], msg.as_string())
 
             server.quit()
-            log.info('Sent email to {}.'.format(email))
+            log.info('Sent email to {}.'.format(to))
         except KeyError as e:
             log.warning('{} missing in environmental variables, skip sending message!'.format(e))
         except:
@@ -220,10 +222,10 @@ class Monitor(threading.Thread):
 
 
 class BinanceMonitor(Monitor):
-    def __init__(self, url, exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
+    def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
         super(BinanceMonitor, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
 
-    #@print_function_name
+    @dec.time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -235,12 +237,14 @@ class BinanceMonitor(Monitor):
         all_tickers = json.loads(urllib2.urlopen(self.url).read())
         for t in all_tickers:
             # Track the prices for all tickers
+            log.debug('{} {}'.format(t['symbol'], t['price']))
+            if not t['price']:
+                t['price'] = 0
             if t['symbol'] in self.tickers_price_history.keys():
                 self.tickers_price_history[t['symbol']].append(float(t['price']))
             else:
                 self.tickers_price_history[t['symbol']] = deque([float(t['price'])], self.number_of_prices_to_track)
 
-        log.debug(my_tickers)
         if my_tickers:
             # Get only tickers that match my_tickers
             my_tickers_price_history = {}
@@ -249,28 +253,27 @@ class BinanceMonitor(Monitor):
                     my_tickers_price_history[t] = self.tickers_price_history[t]
         else:
             my_tickers_price_history = self.tickers_price_history
-        log.debug(my_tickers_price_history)
         return my_tickers_price_history
-        
-    #@print_function_name
+
+    @dec.time_elapsed
     def compose_message(self, original_message, ticker):
-        # Compose message
+        '''Compose email message.'''
         message = original_message.replace(', ', '\n') + '\n'
         # Only USDT is 4 chars long
         if ticker.endswith('USDT'):
-            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(t[:-4], t[-4:])
+            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(ticker[:-4], ticker[-4:])
         else:
-            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(t[:-3], t[-3:])
+            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(ticker[:-3], ticker[-3:])
         message += 'Time sent: {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
         # message += '    '  # Spaces after the message are needed for display purposes when text is received
         return message
-        
+
 
 class BittrexMonitor(Monitor):
-    def __init__(self, url, exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
+    def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
         super(BittrexMonitor, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
-        
-    #@print_function_name
+
+    @dec.time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -282,12 +285,14 @@ class BittrexMonitor(Monitor):
         all_tickers = json.loads(urllib2.urlopen(self.url).read())['result']
         for t in all_tickers:
             # Track the prices for all tickers
+            log.debug('{} {}'.format(t['MarketName'], t['Last']))
+            if not t['Last']:
+                t['Last'] = 0
             if t['MarketName'] in self.tickers_price_history.keys():
                 self.tickers_price_history[t['MarketName']].append(float(t['Last']))
             else:
                 self.tickers_price_history[t['MarketName']] = deque([float(t['Last'])], self.number_of_prices_to_track)
 
-        log.debug(my_tickers)
         if my_tickers:
             # Get only tickers that match my_tickers
             my_tickers_price_history = {}
@@ -296,31 +301,13 @@ class BittrexMonitor(Monitor):
                     my_tickers_price_history[t] = self.tickers_price_history[t]
         else:
             my_tickers_price_history = self.tickers_price_history
-        log.debug(my_tickers_price_history)
         return my_tickers_price_history
 
-    #@print_function_name
+    @dec.time_elapsed
     def compose_message(self, original_message, ticker):
-        # Compose message
+        '''Compose email message.'''
         message = original_message.replace(', ', '\n') + '\n'
-        message += 'https://www.bittrex.com/Market/Index?MarketName=BTC-ETH={}\n'.format(ticker)
+        message += 'https://www.bittrex.com/Market/Index?MarketName={}\n'.format(ticker)
         message += 'Time sent: {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
         # message += '    '  # Spaces after the message are needed for display purposes when text is received
         return message
-
-
-if __name__ == '__main__':
-    try:
-        binance_url = 'https://api.binance.com/api/v1/ticker/allPrices'
-        bittrex_url = 'https://bittrex.com/api/v1.1/public/getmarketsummaries'
-
-        binance = BinanceMonitor(binance_url, number_of_prices_to_track=180)
-        bittrex = BittrexMonitor(bittrex_url, number_of_prices_to_track=180)
-
-        binance.start()
-        bittrex.start()
-    except Exception as e:
-        # Catch all python exceptions occurred in the main thread to log for
-        # troubleshooting purposes, since this monitor is intended to run in
-        # the background
-        log.exception(e.message)
