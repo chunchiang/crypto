@@ -18,7 +18,6 @@ sys.path.insert(0, package_path)
 import monitor
 from lib import all_loggers
 
-
 # Initialize loggers
 name = os.path.basename(__file__).split('.')[0]
 filename = 'logs/{}_{}.log'.format(datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''), name)
@@ -29,7 +28,6 @@ log = logging.getLogger(__name__)
 all_loggers.addHandlerToAllLoggers(handler)
 all_loggers.setLevelToAllLoggers(logging.INFO)
 log.info('Logging started on {}...'.format(datetime.datetime.now()))
-
 
 if __name__ == '__main__':
     try:

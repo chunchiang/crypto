@@ -23,7 +23,6 @@ import sys
 import threading
 import time
 import urllib2
-
 from collections import deque
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
@@ -34,7 +33,6 @@ sys.path.insert(0, package_path)
 
 # Import your package (if any) below
 from lib import dec
-
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +68,10 @@ class Monitor(threading.Thread):
 
                 # Import config
                 self.config = self.import_config('{}.ini'.format(self.exchange))
-                log.debug(self.my_tickers)
-                log.debug(self.number_of_prices_to_track)
-                log.debug(self.wait_before_poll)
-                log.debug(self.inform_limit)
+                log.info(self.my_tickers)
+                log.info(self.number_of_prices_to_track)
+                log.info(self.wait_before_poll)
+                log.info(self.inform_limit)
 
                 # Get new prices
                 log.info('Get price updates')
@@ -97,7 +95,6 @@ class Monitor(threading.Thread):
                         new_price = p[min_price_index]
 
                     # Calculate price fluctuation
-                    price_diff = new_price - old_price
                     percent_diff = (new_price / old_price - 1) * 100
 
                     if abs(percent_diff) > self.inform_limit:
@@ -134,7 +131,7 @@ class Monitor(threading.Thread):
         if 'inform_limit' in config.keys():
             try:
                 self.inform_limit = float(config['inform_limit'])
-            except ValueError as e:
+            except ValueError:
                 log.warning('Invalid setting, "inform_limit" in {}.ini is not a float!'.format(self.exchange))
 
         # Get logging_level, default is WARNING
@@ -166,14 +163,14 @@ class Monitor(threading.Thread):
         if 'number_of_prices_to_track' in config.keys():
             try:
                 self.number_of_prices_to_track = int(config['number_of_prices_to_track'])
-            except ValueError as e:
+            except ValueError:
                 log.warning('Invalid setting, "number_of_prices_to_track" in {}.ini is not an integer!'.format(self.exchange))
 
         # Get wait_before_poll
         if 'wait_before_poll' in config.keys():
             try:
                 self.wait_before_poll = int(config['wait_before_poll'])
-            except ValueError as e:
+            except ValueError:
                 log.warning('Invalid setting, "wait_before_poll" in {}.ini is not an integer!'.format(self.exchange))
 
         log.debug(config)
