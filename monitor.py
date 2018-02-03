@@ -76,6 +76,8 @@ class Monitor(threading.Thread):
                 # Get new prices
                 log.info('Get price updates')
                 my_tickers_price_history = self.get_prices(self.my_tickers)
+
+                email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
                     # Convert collections.deque to list
                     p = list(p)
@@ -98,15 +100,19 @@ class Monitor(threading.Thread):
                     percent_diff = (new_price / old_price - 1) * 100
 
                     if abs(percent_diff) > self.inform_limit:
-                        message = '{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, inform_limit: {4}%'.format(t, percent_diff, old_price, new_price, self.config['inform_limit'])
-                        log.info(message)
-                        if 'email' in self.config.keys():
-                            for email in self.config['email'].split(','):
-                                self.send_email(email.strip(), '{} Update'.format(self.exchange), self.compose_message(message, t))
+                        # Compose all the messages into email content
+                        email_content += self.compose_message(t, percent_diff, old_price, new_price, self.config['inform_limit'])
 
                         # Clear the ticker prices to start fresh to prevent script from keep sending message
                         self.tickers_price_history[t].clear()
-                        time.sleep(.01)
+
+                if email_content:
+                    log.debug(email_content)
+                    if 'email' in self.config.keys():
+                        for email in self.config['email'].split(','):
+                            self.send_email(email.strip(), '{} Update'.format(self.exchange), email_content)
+                            time.sleep(.01)
+
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
             # troubleshooting purposes, since this monitor is intended to run in
@@ -177,12 +183,13 @@ class Monitor(threading.Thread):
         return config
 
     @dec.time_elapsed
-    def compose_message(self, original_message, ticker):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
         '''Compose email message.
 
         Reserved for child class to implement
         '''
-        pass
+        log.info('{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, inform_limit: {4}%'.format(ticker, percent_diff, old_price, new_price, inform_limit))
+        return ''
 
     @dec.time_elapsed
     def send_email(self, to, subject, message):
@@ -197,7 +204,8 @@ class Monitor(threading.Thread):
             msg['From'] = email
             msg['To'] = to
             msg['Subject'] = subject
-            msg.attach(MIMEText(message, 'plain'))
+            # msg.attach(MIMEText(message, 'plain'))
+            msg.attach(MIMEText(message, 'html'))
 
             # Establish a secure session with gmail's outgoing SMTP server using your gmail account
             # Reference: http://stackabuse.com/how-to-send-emails-with-gmail-using-python/
@@ -253,16 +261,24 @@ class BinanceMonitor(Monitor):
         return my_tickers_price_history
 
     @dec.time_elapsed
-    def compose_message(self, original_message, ticker):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
         '''Compose email message.'''
-        message = original_message.replace(', ', '\n') + '\n'
+        message = super(BinanceMonitor, self).compose_message(ticker, percent_diff, old_price, new_price, inform_limit)
+
+        color = 'green' if percent_diff > 0 else 'red'
+
         # Only USDT is 4 chars long
         if ticker.endswith('USDT'):
-            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(ticker[:-4], ticker[-4:])
+            message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-4], ticker[-4:])
         else:
-            message += 'https://www.binance.com/trade.html?symbol={}_{}\n'.format(ticker[:-3], ticker[-3:])
-        message += 'Time sent: {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
+            message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-3], ticker[-3:])
+        message +=  '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += 'old price: {:.8f}<br />'.format(old_price)
+        message += 'new price: {:.8f}<br />'.format(new_price)
+        message += 'inform_limit: {}%<br />'.format(inform_limit)
+        message += 'Time sent: {}<br />'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
         # message += '    '  # Spaces after the message are needed for display purposes when text is received
+        message += '<br />'
         return message
 
 
@@ -301,10 +317,17 @@ class BittrexMonitor(Monitor):
         return my_tickers_price_history
 
     @dec.time_elapsed
-    def compose_message(self, original_message, ticker):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
         '''Compose email message.'''
-        message = original_message.replace(', ', '\n') + '\n'
-        message += 'https://www.bittrex.com/Market/Index?MarketName={}\n'.format(ticker)
-        message += 'Time sent: {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
+        message = super(BittrexMonitor, self).compose_message(ticker, percent_diff, old_price, new_price, inform_limit)
+
+        color = 'green' if percent_diff > 0 else 'red'
+        message += 'https://www.bittrex.com/Market/Index?MarketName={}<br />'.format(ticker)
+        message +=  '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += 'old price: {:.8f}<br />'.format(old_price)
+        message += 'new price: {:.8f}<br />'.format(new_price)
+        message += 'inform_limit: {}%<br />'.format(inform_limit)
+        message += 'Time sent: {}<br />'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
         # message += '    '  # Spaces after the message are needed for display purposes when text is received
+        message += '<br />'
         return message
