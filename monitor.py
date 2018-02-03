@@ -222,8 +222,9 @@ class Monitor(threading.Thread):
             log.info('Sent email to {}.'.format(to))
         except KeyError as e:
             log.warning('{} missing in environmental variables, skip sending message!'.format(e))
-        except:
+        except Exception as e:
             log.warning('Unable to send message!')
+            log.exception(e.message)
 
 
 class BinanceMonitor(Monitor):
