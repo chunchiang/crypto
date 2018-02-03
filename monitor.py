@@ -273,7 +273,7 @@ class BinanceMonitor(Monitor):
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-4], ticker[-4:])
         else:
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-3], ticker[-3:])
-        message +=  '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
         message += 'old price: {:.8f}<br />'.format(old_price)
         message += 'new price: {:.8f}<br />'.format(new_price)
         message += 'inform_limit: {}%<br />'.format(inform_limit)
@@ -324,7 +324,7 @@ class BittrexMonitor(Monitor):
 
         color = 'green' if percent_diff > 0 else 'red'
         message += 'https://www.bittrex.com/Market/Index?MarketName={}<br />'.format(ticker)
-        message +=  '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
         message += 'old price: {:.8f}<br />'.format(old_price)
         message += 'new price: {:.8f}<br />'.format(new_price)
         message += 'inform_limit: {}%<br />'.format(inform_limit)
