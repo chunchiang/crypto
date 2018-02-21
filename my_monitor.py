@@ -3,6 +3,12 @@
 
 Usage:
     ./my_monitor.py &
+
+Stop the program:
+    $ ps -e | grep monitor
+     1828 pts/8    00:00:00 my_monitor.py
+    $ kill -9 1828
+
 '''
 import datetime
 import logging
@@ -15,7 +21,7 @@ package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, package_path)
 
 # Import your package (if any) below
-import monitor
+import api
 from lib import all_loggers
 
 # Initialize loggers
@@ -27,14 +33,14 @@ handler.setFormatter(formatter)
 log = logging.getLogger(__name__)
 all_loggers.addHandlerToAllLoggers(handler)
 all_loggers.setLevelToAllLoggers(logging.INFO)
-log.info('Logging started on {}...'.format(datetime.datetime.now()))
+log.info('Logging started...')
 
 if __name__ == '__main__':
     try:
-        binance = monitor.BinanceMonitor(number_of_prices_to_track=180)
+        binance = api.BinanceAPI(number_of_prices_to_track=300)
         binance.start()
 
-        bittrex = monitor.BittrexMonitor(number_of_prices_to_track=180)
+        bittrex = api.BittrexAPI(number_of_prices_to_track=300)
         bittrex.start()
     except Exception as e:
         # Catch all python exceptions occurred in the main thread to log for

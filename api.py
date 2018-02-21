@@ -37,7 +37,7 @@ from lib import dec
 log = logging.getLogger(__name__)
 
 
-class Monitor(threading.Thread):
+class API(threading.Thread):
     def __init__(self, url, exchange, my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
         '''
         param: url
@@ -54,9 +54,11 @@ class Monitor(threading.Thread):
         self.number_of_prices_to_track = number_of_prices_to_track
         self.wait_before_poll = wait_before_poll
         self.inform_limit = inform_limit
+        self.verbose = False
         self.config = self.import_config('{}.ini'.format(self.exchange))
 
         self.tickers_price_history = {}
+        self.price_time = {}
 
         threading.Thread.__init__(self, name=self.exchange)
 
@@ -68,19 +70,19 @@ class Monitor(threading.Thread):
 
                 # Import config
                 self.config = self.import_config('{}.ini'.format(self.exchange))
-                log.info(self.my_tickers)
-                log.info(self.number_of_prices_to_track)
-                log.info(self.wait_before_poll)
-                log.info(self.inform_limit)
+                log.info('number of prices: {}, wait before poll: {}s, inform limit: {}%, tickers: {}'.format(self.number_of_prices_to_track, self.wait_before_poll, self.inform_limit, self.my_tickers))
 
                 # Get new prices
                 log.info('Get price updates')
-                my_tickers_price_history = self.get_prices(self.my_tickers)
+                my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
 
                 email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
                     # Convert collections.deque to list
                     p = list(p)
+                    log.debug(p)
+                    p_time = list(self.price_time[t])
+                    log.debug(p_time)
 
                     # Get min and max price index in each ticker's prices
                     min_price_index = len(p) - 1 - p[::-1].index(min(p))
@@ -89,22 +91,30 @@ class Monitor(threading.Thread):
                     # Assign old and new price
                     old_price = 0
                     new_price = 0
+                    old_price_time = None
+                    new_price_time = None
                     if min_price_index < max_price_index:
                         old_price = p[min_price_index]
+                        old_price_time = p_time[min_price_index]
                         new_price = p[max_price_index]
+                        new_price_time = p_time[max_price_index]
                     else:
                         old_price = p[max_price_index]
+                        old_price_time = p_time[max_price_index]
                         new_price = p[min_price_index]
+                        new_price_time = p_time[min_price_index]
 
                     # Calculate price fluctuation
                     percent_diff = (new_price / old_price - 1) * 100
+                    time_diff = new_price_time - old_price_time
 
                     if abs(percent_diff) > self.inform_limit:
                         # Compose all the messages into email content
-                        email_content += self.compose_message(t, percent_diff, old_price, new_price, self.config['inform_limit'])
+                        email_content += self.compose_message(t, percent_diff, old_price, new_price, time_diff, self.config['inform_limit'], self.verbose)
 
                         # Clear the ticker prices to start fresh to prevent script from keep sending message
                         self.tickers_price_history[t].clear()
+                        self.price_time[t].clear()
 
                 if email_content:
                     log.debug(email_content)
@@ -115,13 +125,49 @@ class Monitor(threading.Thread):
 
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
-            # troubleshooting purposes, since this monitor is intended to run in
+            # troubleshooting purposes, since this class is intended to run in
             # the background
             log.exception(e.message)
 
     @dec.time_elapsed
-    def get_prices(self, my_tickers=None):
-        pass
+    def get_prices(self, all_tickers, ticker_key, price_key, my_tickers=None):
+        '''Get all prices from URL specified in the class
+
+        param: ticker_key
+        param: price_key
+        param: all_tickers: a list of all the tickers in dictionary form with at least ticker and price key value pair
+        param: my_tickers: tickers of interest
+        '''
+        if isinstance(all_tickers, str):
+            all_tickers = [all_tickers]
+        if isinstance(my_tickers, str):
+            my_tickers = [my_tickers]
+
+        for t in all_tickers:
+            # Track the prices for all tickers
+            # log.debug('{} {}'.format(t[ticker_key], t[price_key]))
+            if not t[price_key]:
+                t[price_key] = 0
+            if t[ticker_key] in self.tickers_price_history.keys():
+                if not self.tickers_price_history[t[ticker_key]] or not float(t[price_key]) == self.tickers_price_history[t[ticker_key]][-1]:
+                    self.tickers_price_history[t[ticker_key]].append(float(t[price_key]))
+                    self.price_time[t[ticker_key]].append(datetime.datetime.now())
+            else:
+                self.tickers_price_history[t[ticker_key]] = deque([float(t[price_key])], self.number_of_prices_to_track)
+                self.price_time[t[ticker_key]] = deque([datetime.datetime.now()], self.number_of_prices_to_track)
+
+        if my_tickers:
+            # Get only tickers that match my_tickers
+            my_tickers_price_history = {}
+            my_price_time = {}
+            for t in my_tickers:
+                if t in self.tickers_price_history.keys():
+                    my_tickers_price_history[t] = self.tickers_price_history[t]
+                    my_price_time[t] = self.price_time[t]
+        else:
+            my_tickers_price_history = self.tickers_price_history
+            my_price_time = self.price_time
+        return my_tickers_price_history, my_price_time
 
     @dec.time_elapsed
     def import_config(self, filename):
@@ -179,17 +225,40 @@ class Monitor(threading.Thread):
             except ValueError:
                 log.warning('Invalid setting, "wait_before_poll" in {}.ini is not an integer!'.format(self.exchange))
 
+        # Get verbosity for email message
+        if 'verbose' in config.keys():
+            if config['verbose'] == 'True':
+                self.verbose = True
+            else:
+                self.verbose = False
+
         log.debug(config)
         return config
 
     @dec.time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, inform_limit, verbose=False):
         '''Compose email message.
 
         Reserved for child class to implement
         '''
-        log.info('{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, inform_limit: {4}%'.format(ticker, percent_diff, old_price, new_price, inform_limit))
-        return ''
+        log.info('{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, time_diff: {4}, inform_limit: {5}%'.format(ticker, percent_diff, old_price, new_price, time_diff, inform_limit))
+        message = ''
+        if verbose:
+            message += '==========<br />'
+            message += '{} price history information<br />'.format(ticker)
+            message += '{}<br />'.format(self.tickers_price_history[ticker])
+            message += '{}<br />'.format(self.price_time[ticker])
+            for i, price in enumerate(self.tickers_price_history[ticker]):
+                message += '{} price is {} on {}<br />'.format(ticker, price, self.price_time[ticker][i])
+            message += '==========<br />'
+            message += '<br />'
+        return message
+
+    def to_hours_minutes_seconds(self, time_delta):
+        hours = time_delta.seconds / (60 * 60)
+        minutes = time_delta.seconds / 60 % 60
+        seconds = time_delta.seconds % 60
+        return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
     @dec.time_elapsed
     def send_email(self, to, subject, message):
@@ -227,9 +296,9 @@ class Monitor(threading.Thread):
             log.exception(e.message)
 
 
-class BinanceMonitor(Monitor):
+class BinanceAPI(API):
     def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
-        super(BinanceMonitor, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
+        super(BinanceAPI, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
 
     @dec.time_elapsed
     def get_prices(self, my_tickers=None):
@@ -240,31 +309,12 @@ class BinanceMonitor(Monitor):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        all_tickers = json.loads(urllib2.urlopen(self.url).read())
-        for t in all_tickers:
-            # Track the prices for all tickers
-            log.debug('{} {}'.format(t['symbol'], t['price']))
-            if not t['price']:
-                t['price'] = 0
-            if t['symbol'] in self.tickers_price_history.keys():
-                self.tickers_price_history[t['symbol']].append(float(t['price']))
-            else:
-                self.tickers_price_history[t['symbol']] = deque([float(t['price'])], self.number_of_prices_to_track)
-
-        if my_tickers:
-            # Get only tickers that match my_tickers
-            my_tickers_price_history = {}
-            for t in my_tickers:
-                if t in self.tickers_price_history.keys():
-                    my_tickers_price_history[t] = self.tickers_price_history[t]
-        else:
-            my_tickers_price_history = self.tickers_price_history
-        return my_tickers_price_history
+        return super(BinanceAPI, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
 
     @dec.time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, inform_limit, verbose=False):
         '''Compose email message.'''
-        message = super(BinanceMonitor, self).compose_message(ticker, percent_diff, old_price, new_price, inform_limit)
+        message = super(BinanceAPI, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, inform_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
 
@@ -273,7 +323,7 @@ class BinanceMonitor(Monitor):
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-4], ticker[-4:])
         else:
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-3], ticker[-3:])
-        message += '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_diff))
         message += 'old price: {:.8f}<br />'.format(old_price)
         message += 'new price: {:.8f}<br />'.format(new_price)
         message += 'inform_limit: {}%<br />'.format(inform_limit)
@@ -283,9 +333,9 @@ class BinanceMonitor(Monitor):
         return message
 
 
-class BittrexMonitor(Monitor):
+class BittrexAPI(API):
     def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, inform_limit=50):
-        super(BittrexMonitor, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
+        super(BittrexAPI, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, inform_limit)
 
     @dec.time_elapsed
     def get_prices(self, my_tickers=None):
@@ -293,38 +343,21 @@ class BittrexMonitor(Monitor):
 
         URL for getting all ticker prices
         Reference: https://stackoverflow.com/questions/17178483/how-do-you-send-an-http-get-web-request-in-python
+
+        param: my_tickers
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        all_tickers = json.loads(urllib2.urlopen(self.url).read())['result']
-        for t in all_tickers:
-            # Track the prices for all tickers
-            log.debug('{} {}'.format(t['MarketName'], t['Last']))
-            if not t['Last']:
-                t['Last'] = 0
-            if t['MarketName'] in self.tickers_price_history.keys():
-                self.tickers_price_history[t['MarketName']].append(float(t['Last']))
-            else:
-                self.tickers_price_history[t['MarketName']] = deque([float(t['Last'])], self.number_of_prices_to_track)
-
-        if my_tickers:
-            # Get only tickers that match my_tickers
-            my_tickers_price_history = {}
-            for t in my_tickers:
-                if t in self.tickers_price_history.keys():
-                    my_tickers_price_history[t] = self.tickers_price_history[t]
-        else:
-            my_tickers_price_history = self.tickers_price_history
-        return my_tickers_price_history
+        return super(BittrexAPI, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
 
     @dec.time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, inform_limit):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, inform_limit, verbose=False):
         '''Compose email message.'''
-        message = super(BittrexMonitor, self).compose_message(ticker, percent_diff, old_price, new_price, inform_limit)
+        message = super(BittrexAPI, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, inform_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
         message += 'https://www.bittrex.com/Market/Index?MarketName={}<br />'.format(ticker)
-        message += '{}: <font color="{}">{:+.2f}%</font><br />'.format(ticker, color, percent_diff)
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_diff))
         message += 'old price: {:.8f}<br />'.format(old_price)
         message += 'new price: {:.8f}<br />'.format(new_price)
         message += 'inform_limit: {}%<br />'.format(inform_limit)
