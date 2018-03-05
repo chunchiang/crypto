@@ -192,7 +192,7 @@ class API(threading.Thread):
             except ValueError:
                 log.warning('Invalid setting, "percent_limit" in {}.ini is not a float!'.format(self.exchange))
 
-        # Get time_limit, default is 0 which means no limit
+        # Get time_limit (in seconds), default is 0 which means no limit
         if 'time_limit' in config.keys():
             try:
                 self.time_limit = int(config['time_limit'])
