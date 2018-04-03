@@ -73,7 +73,7 @@ class API(threading.Thread):
 
                 # Import config
                 self.config = self.import_config('{}.ini'.format(self.exchange))
-                log.info('number of prices: {}, wait before poll: {}s, percent limit: {}%, time limit: {} mins, tickers: {}'.format(self.number_of_prices_to_track, self.wait_before_poll, self.percent_limit, self.time_limit, self.my_tickers))
+                log.info('number of prices: {}, wait before poll: {}s, percent limit: {}%, time limit: {} secs, tickers: {}'.format(self.number_of_prices_to_track, self.wait_before_poll, self.percent_limit, self.time_limit, self.my_tickers))
 
                 # Get new prices
                 log.info('Get price updates')
@@ -125,9 +125,8 @@ class API(threading.Thread):
                 if email_content:
                     log.debug(email_content)
                     if 'email' in self.config.keys():
-                        for email in self.config['email'].split(','):
-                            self.send_email(email.strip(), '{} Update'.format(self.exchange), email_content)
-                            time.sleep(.01)
+                        self.send_email(self.config['email'].strip(), '{} Update'.format(self.exchange), email_content)
+                        time.sleep(.01)
 
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
