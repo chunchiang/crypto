@@ -308,9 +308,9 @@ class API(threading.Thread):
             log.exception(e.message)
 
 
-class BinanceAPI(API):
+class Binance(API):
     def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
-        super(BinanceAPI, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+        super(Binance, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
     @dec.time_elapsed
     def get_prices(self, my_tickers=None):
@@ -321,12 +321,12 @@ class BinanceAPI(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        return super(BinanceAPI, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
+        return super(Binance, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
 
     @dec.time_elapsed
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
         '''Compose email message.'''
-        message = super(BinanceAPI, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
+        message = super(Binance, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
 
@@ -345,9 +345,9 @@ class BinanceAPI(API):
         return message
 
 
-class BittrexAPI(API):
+class Bittrex(API):
     def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
-        super(BittrexAPI, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+        super(Bittrex, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
     @dec.time_elapsed
     def get_prices(self, my_tickers=None):
@@ -360,12 +360,12 @@ class BittrexAPI(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        return super(BittrexAPI, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
+        return super(Bittrex, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
 
     @dec.time_elapsed
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
         '''Compose email message.'''
-        message = super(BittrexAPI, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
+        message = super(Bittrex, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
         message += 'https://www.bittrex.com/Market/Index?MarketName={}<br />'.format(ticker)

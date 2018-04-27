@@ -37,10 +37,10 @@ log.info('Logging started...')
 
 if __name__ == '__main__':
     try:
-        binance = api.BinanceAPI(number_of_prices_to_track=300)
+        binance = api.Binance(number_of_prices_to_track=300)
         binance.start()
 
-        bittrex = api.BittrexAPI(number_of_prices_to_track=300)
+        bittrex = api.Bittrex(number_of_prices_to_track=300)
         bittrex.start()
     except Exception as e:
         # Catch all python exceptions occurred in the main thread to log for
