@@ -132,6 +132,7 @@ class API(threading.Thread):
             # Catch all python exceptions occurred in the main thread to log for
             # troubleshooting purposes, since this class is intended to run in
             # the background
+            log.error('Something nasty happened in the thread!')
             log.exception(e.message)
 
     @dec.time_elapsed

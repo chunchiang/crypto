@@ -24,9 +24,15 @@ sys.path.insert(0, package_path)
 import api
 from lib import all_loggers
 
+# Create log directory to store all logs for current UUT
+log_dir = 'logs'
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir, 0755)  # Equivalent to mkdir -p
+
 # Initialize loggers
-name = os.path.basename(__file__).split('.')[0]
-filename = 'logs/{}_{}.log'.format(datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''), name)
+this_filename = os.path.basename(__file__).split('.')[0]
+# filename = '~/{0}/{1}/{1}_{2}.log'.format(log_dir, this_filename, datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''))
+filename = '{}/{}_{}.log'.format(log_dir, this_filename, datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''))
 handler = logging.FileHandler(filename)
 formatter = logging.Formatter('%(asctime)s %(name)-8s %(threadName)-10s %(levelname)-8s %(message)s')
 handler.setFormatter(formatter)
@@ -46,4 +52,5 @@ if __name__ == '__main__':
         # Catch all python exceptions occurred in the main thread to log for
         # troubleshooting purposes, since this monitor is intended to run in
         # the background
+        log.error('Something nasty happened in my_monitor!')
         log.exception(e.message)
