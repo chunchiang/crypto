@@ -1,6 +1,14 @@
 '''
 TODO:  Add to send email in specified time frame, eg. only if price fluctuated 25% within 30 minutes
 
+This program uses the gmail account specified from the environmental variables
+to send out email notifications to recipients.  The following variables need to
+be defined in .bashrc in order for the email function to work.
+
+# variables for ~/projects/crypto/monitor.py
+export GMAIL="<id>@gmail.com"
+export GMAIL_PASS="<password>"
+
 The program is running in the background
 Reference: https://askubuntu.com/questions/396654/how-to-run-the-python-program-in-the-background-in-ubuntu-machine
 
@@ -310,14 +318,14 @@ class API(threading.Thread):
             server.login(email, password)
 
             # Send text message through SMS gateway of destination number
-            server.sendmail(msg['From'], msg['to'], msg.as_string())
-
+            server.sendmail(msg['From'], msg['To'], msg.as_string())
             server.quit()
+            
             log.info('Sent email to {}.'.format(to))
         except KeyError as e:
-            log.warning('{} missing in environmental variables, skip sending message!'.format(e))
+            log.warning('{} missing "From" email information in environmental variables, skip sending email!'.format(e))
         except Exception as e:
-            log.warning('Unable to send message!')
+            log.warning('Unable to send email!')
             log.exception(e.message)
 
 
