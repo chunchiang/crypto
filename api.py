@@ -34,7 +34,7 @@ package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, package_path)
 
 # Import your package (if any) below
-from lib import dec
+from lib.dec import time_elapsed
 
 log = logging.getLogger(__name__)
 
@@ -68,24 +68,24 @@ class API(threading.Thread):
     def run(self):
         try:
             while True:
-                log.info('Waiting for {}s before next price poll...'.format(self.wait_before_poll))
+                log.debug('Waiting for {}s before next price poll...'.format(self.wait_before_poll))
                 time.sleep(self.wait_before_poll)
 
                 # Import config
                 self.config = self.import_config('{}.ini'.format(self.exchange))
-                log.info('number of prices: {}, wait before poll: {}s, percent limit: {}%, time limit: {} secs, tickers: {}'.format(self.number_of_prices_to_track, self.wait_before_poll, self.percent_limit, self.time_limit, self.my_tickers))
+                log.debug('number of prices: {}, wait before poll: {}s, percent limit: {}%, time limit: {} secs, tickers: {}'.format(self.number_of_prices_to_track, self.wait_before_poll, self.percent_limit, self.time_limit, self.my_tickers))
 
                 # Get new prices
-                log.info('Get price updates')
+                log.debug('Get price updates')
                 my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
 
                 email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
                     # Convert collections.deque to list
                     p = list(p)
-                    log.debug(p)
+                    # log.debug(p)
                     p_time = list(self.price_time[t])
-                    log.debug(p_time)
+                    # log.debug(p_time)
 
                     # Get min and max price index in each ticker's prices
                     min_price_index = len(p) - 1 - p[::-1].index(min(p))
@@ -127,6 +127,8 @@ class API(threading.Thread):
                     if 'email' in self.config.keys():
                         self.send_email(self.config['email'].strip(), '{} Update'.format(self.exchange), email_content)
                         time.sleep(.01)
+                    else:
+                        log.warning('No email provided in the {}.ini'.format(self.exchange))
 
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
@@ -135,7 +137,7 @@ class API(threading.Thread):
             log.error('Something nasty happened in the thread!')
             log.exception(e.message)
 
-    @dec.time_elapsed
+    @time_elapsed
     def get_prices(self, all_tickers, ticker_key, price_key, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -175,80 +177,90 @@ class API(threading.Thread):
             my_price_time = self.price_time
         return my_tickers_price_history, my_price_time
 
-    @dec.time_elapsed
+    @time_elapsed
     def import_config(self, filename):
         # Import config from .ini
         config = {}
-        with open(filename, 'r') as f:
-            for line in f:
-                if not line.strip().startswith('#'):
-                    k, v = line.split('=')
-                    config[k.strip()] = v.strip()
+        
+        try:
+            with open(filename, 'r') as f:
+                for line in f:
+                    if not line.strip().startswith('#'):
+                        k, v = line.split('=')
+                        config[k.strip()] = v.strip()
 
-        # Get percent_limit, default is 30
-        if 'percent_limit' in config.keys():
-            try:
-                self.percent_limit = float(config['percent_limit'])
-            except ValueError:
-                log.warning('Invalid setting, "percent_limit" in {}.ini is not a float!'.format(self.exchange))
+            # Get percent_limit, default is 30
+            if 'percent_limit' in config.keys():
+                try:
+                    self.percent_limit = float(config['percent_limit'])
+                except ValueError:
+                    log.warning('Invalid setting, "percent_limit" in {}.ini is not a float!'.format(self.exchange))
 
-        # Get time_limit (in seconds), default is 0 which means no limit
-        if 'time_limit' in config.keys():
-            try:
-                self.time_limit = int(config['time_limit'])
-            except ValueError:
-                log.warning('Invalid setting, "time_limit" in {}.ini is not a integer (in seconds)!'.format(self.exchange))
+            # Get time_limit (in seconds), default is 0 which means no limit
+            if 'time_limit' in config.keys():
+                try:
+                    self.time_limit = int(config['time_limit'])
+                except ValueError:
+                    log.warning('Invalid setting, "time_limit" in {}.ini is not a integer (in seconds)!'.format(self.exchange))
 
-                # Get logging_level, default is WARNING
-        if 'logging_level' in config.keys():
-            # Set logging level for all loggers
-            from lib import all_loggers
-            if config['logging_level'].upper() == 'DEBUG':
-                all_loggers.setLevelToAllLoggers(logging.DEBUG)
-            elif config['logging_level'].upper() == 'INFO':
-                all_loggers.setLevelToAllLoggers(logging.INFO)
-            elif config['logging_level'].upper() == 'WARNING':
-                all_loggers.setLevelToAllLoggers(logging.WARNING)
-            elif config['logging_level'].upper() == 'ERROR':
-                all_loggers.setLevelToAllLoggers(logging.ERROR)
-            elif config['logging_level'].upper() == 'CRITICAL':
-                all_loggers.setLevelToAllLoggers(logging.CRITICAL)
-            else:
-                # Set to default level
-                all_loggers.setLevelToAllLoggers(logging.WARNING)
+            # Get logging_level, default is INFO
+            if 'logging_level' in config.keys():
+                # Set logging level for all loggers
+                from lib import all_loggers
+                if config['logging_level'].upper() == 'DEBUG':
+                    all_loggers.setLevelToAllLoggers(logging.DEBUG)
+                elif config['logging_level'].upper() == 'INFO':
+                    all_loggers.setLevelToAllLoggers(logging.INFO)
+                elif config['logging_level'].upper() == 'WARNING':
+                    all_loggers.setLevelToAllLoggers(logging.WARNING)
+                elif config['logging_level'].upper() == 'ERROR':
+                    all_loggers.setLevelToAllLoggers(logging.ERROR)
+                elif config['logging_level'].upper() == 'CRITICAL':
+                    all_loggers.setLevelToAllLoggers(logging.CRITICAL)
+                else:
+                    # Set to default level
+                    all_loggers.setLevelToAllLoggers(logging.INFO)
 
-        # Get my_tickers
-        if 'my_tickers' in config.keys():
-            if config['my_tickers'] == "":
-                self.my_tickers = None
-            else:
-                self.my_tickers = [t.strip() for t in config['my_tickers'].split(',')]
+            # Get my_tickers
+            if 'my_tickers' in config.keys():
+                if config['my_tickers'] == "":
+                    self.my_tickers = None
+                else:
+                    self.my_tickers = [t.strip() for t in config['my_tickers'].split(',')]
 
-        # Get number_of_prices_to_track
-        if 'number_of_prices_to_track' in config.keys():
-            try:
-                self.number_of_prices_to_track = int(config['number_of_prices_to_track'])
-            except ValueError:
-                log.warning('Invalid setting, "number_of_prices_to_track" in {}.ini is not an integer!'.format(self.exchange))
+            # Get number_of_prices_to_track
+            if 'number_of_prices_to_track' in config.keys():
+                try:
+                    self.number_of_prices_to_track = int(config['number_of_prices_to_track'])
+                except ValueError:
+                    log.warning('Invalid setting, "number_of_prices_to_track" in {}.ini is not an integer!'.format(self.exchange))
 
-        # Get wait_before_poll
-        if 'wait_before_poll' in config.keys():
-            try:
-                self.wait_before_poll = int(config['wait_before_poll'])
-            except ValueError:
-                log.warning('Invalid setting, "wait_before_poll" in {}.ini is not an integer!'.format(self.exchange))
+            # Get wait_before_poll
+            if 'wait_before_poll' in config.keys():
+                try:
+                    self.wait_before_poll = int(config['wait_before_poll'])
+                except ValueError:
+                    log.warning('Invalid setting, "wait_before_poll" in {}.ini is not an integer!'.format(self.exchange))
 
-        # Get verbosity for email message
-        if 'verbose' in config.keys():
-            if config['verbose'] == 'True':
-                self.verbose = True
-            else:
-                self.verbose = False
-
+            # Get verbosity for email message
+            if 'verbose' in config.keys():
+                if config['verbose'] == 'True':
+                    self.verbose = True
+                else:
+                    self.verbose = False
+        except IOError:
+            with open(filename, 'w') as f:
+                f.write('email=\n')
+                f.write('percent_limit={}\n'.format(self.percent_limit))
+                f.write('time_limit={}\n'.format(self.time_limit))
+                f.write('logging_level=\n')
+                f.write('my_tickers=\n')
+                f.write('wait_before_poll={}\n'.format(self.wait_before_poll))
+                f.write('verbose=False\n')
         log.debug(config)
         return config
 
-    @dec.time_elapsed
+    @time_elapsed
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
         '''Compose email message.
 
@@ -273,7 +285,7 @@ class API(threading.Thread):
         seconds = time_delta.seconds % 60
         return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
-    @dec.time_elapsed
+    @time_elapsed
     def send_email(self, to, subject, message):
         try:
             # Get gmail authentication from environmental variables
@@ -313,7 +325,7 @@ class Binance(API):
     def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
         super(Binance, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
-    @dec.time_elapsed
+    @time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -324,7 +336,7 @@ class Binance(API):
             my_tickers = [my_tickers]
         return super(Binance, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
 
-    @dec.time_elapsed
+    @time_elapsed
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
         '''Compose email message.'''
         message = super(Binance, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
@@ -350,7 +362,7 @@ class Bittrex(API):
     def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
         super(Bittrex, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
-    @dec.time_elapsed
+    @time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -363,7 +375,7 @@ class Bittrex(API):
             my_tickers = [my_tickers]
         return super(Bittrex, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
 
-    @dec.time_elapsed
+    @time_elapsed
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
         '''Compose email message.'''
         message = super(Bittrex, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
