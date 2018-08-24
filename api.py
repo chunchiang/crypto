@@ -1,9 +1,8 @@
-'''
-TODO:  Add to send email in specified time frame, eg. only if price fluctuated 25% within 30 minutes
-
-This program uses the gmail account specified from the environmental variables
-to send out email notifications to recipients.  The following variables need to
-be defined in .bashrc in order for the email function to work.
+'''This module uses the API provided by the crypto exchanges to query coin
+prices.  An gmail account credenital needs to be defined in the environmental
+variables in order to send out notifications to recipients.  The following
+variables need to be defined in .bashrc in order for the email function to
+work.
 
 # variables for ~/projects/crypto/monitor.py
 export GMAIL="<id>@gmail.com"
@@ -42,7 +41,6 @@ package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, package_path)
 
 # Import your package (if any) below
-from lib.dec import time_elapsed
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +56,7 @@ class API(threading.Thread):
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
 
+        self.stop = False
         self.url = url
         self.exchange = exchange
         self.my_tickers = my_tickers
@@ -75,7 +74,8 @@ class API(threading.Thread):
 
     def run(self):
         try:
-            while True:
+            log.info('Thread {} started...'.format(self.exchange))
+            while not self.stop:
                 log.debug('Waiting for {}s before next price poll...'.format(self.wait_before_poll))
                 time.sleep(self.wait_before_poll)
 
@@ -119,12 +119,12 @@ class API(threading.Thread):
                     percent_diff = (new_price / old_price - 1) * 100
                     # new_price_time = new_price_time.replace(microsecond=0)  # Do not display microsecond
                     # old_price_time = old_price_time.replace(microsecond=0)  # Do not display microsecond
-                    time_diff = new_price_time - old_price_time
+                    time_delta = new_price_time - old_price_time
 
                     if abs(percent_diff) > self.percent_limit:
-                        if not self.time_limit or (time_diff.days == 0 and time_diff.seconds < self.time_limit):
+                        if not self.time_limit or (time_delta.days == 0 and time_delta.seconds < self.time_limit):
                             # Compose all the messages into email content
-                            email_content += self.compose_message(t, percent_diff, old_price, new_price, time_diff, self.config['percent_limit'], self.verbose)
+                            email_content += self.compose_message(t, percent_diff, old_price, new_price, time_delta, self.config['percent_limit'], self.verbose)
 
                             # Clear the ticker prices to start fresh to prevent script from keep sending message
                             self.tickers_price_history[t].clear()
@@ -137,15 +137,18 @@ class API(threading.Thread):
                         time.sleep(.01)
                     else:
                         log.warning('No email provided in the {}.ini'.format(self.exchange))
-
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
             # troubleshooting purposes, since this class is intended to run in
             # the background
-            log.error('Something nasty happened in the thread!')
+            log.error('Something nasty happened in thread {}!'.format(self.exchange))
             log.exception(e.message)
+            
+            # Send Ctrl-C to main thread when exception happens in child thread
+            thread.interrupt_main()
+        finally:
+            log.info('Thread {} ended...'.format(self.exchange))
 
-    @time_elapsed
     def get_prices(self, all_tickers, ticker_key, price_key, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -185,12 +188,11 @@ class API(threading.Thread):
             my_price_time = self.price_time
         return my_tickers_price_history, my_price_time
 
-    @time_elapsed
     def import_config(self, filename):
         # Import config from .ini
         config = {}
         
-        try:
+        if os.path.exists(filename):
             with open(filename, 'r') as f:
                 for line in f:
                     if not line.strip().startswith('#'):
@@ -256,7 +258,7 @@ class API(threading.Thread):
                     self.verbose = True
                 else:
                     self.verbose = False
-        except IOError:
+        else:
             with open(filename, 'w') as f:
                 f.write('email=\n')
                 f.write('percent_limit={}\n'.format(self.percent_limit))
@@ -268,13 +270,12 @@ class API(threading.Thread):
         log.debug(config)
         return config
 
-    @time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
         '''Compose email message.
 
         Reserved for child class to implement
         '''
-        log.info('{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, time_diff: {4}, percent_limit: {5}%'.format(ticker, percent_diff, old_price, new_price, time_diff, percent_limit))
+        log.info('{0}: {1:+.2f}%, old price: {2:.8f}, new price: {3:.8f}, time_delta: {4}, percent_limit: {5}%'.format(ticker, percent_diff, old_price, new_price, time_delta, percent_limit))
         message = ''
         if verbose:
             message += '==========<br />'
@@ -293,7 +294,6 @@ class API(threading.Thread):
         seconds = time_delta.seconds % 60
         return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
-    @time_elapsed
     def send_email(self, to, subject, message):
         try:
             # Get gmail authentication from environmental variables
@@ -333,7 +333,6 @@ class Binance(API):
     def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
         super(Binance, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
-    @time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -344,10 +343,9 @@ class Binance(API):
             my_tickers = [my_tickers]
         return super(Binance, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
 
-    @time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
         '''Compose email message.'''
-        message = super(Binance, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
+        message = super(Binance, self).compose_message(ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
 
@@ -356,7 +354,7 @@ class Binance(API):
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-4], ticker[-4:])
         else:
             message += 'https://www.binance.com/trade.html?symbol={}_{}<br />'.format(ticker[:-3], ticker[-3:])
-        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_diff))
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_delta))
         message += 'old price:     {:.8f}<br />'.format(old_price)
         message += 'new price:     {:.8f}<br />'.format(new_price)
         message += 'percent_limit: {}%<br />'.format(percent_limit)
@@ -370,7 +368,6 @@ class Bittrex(API):
     def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
         super(Bittrex, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
-    @time_elapsed
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
 
@@ -383,14 +380,13 @@ class Bittrex(API):
             my_tickers = [my_tickers]
         return super(Bittrex, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
 
-    @time_elapsed
-    def compose_message(self, ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose=False):
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
         '''Compose email message.'''
-        message = super(Bittrex, self).compose_message(ticker, percent_diff, old_price, new_price, time_diff, percent_limit, verbose)
+        message = super(Bittrex, self).compose_message(ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose)
 
         color = 'green' if percent_diff > 0 else 'red'
         message += 'https://www.bittrex.com/Market/Index?MarketName={}<br />'.format(ticker)
-        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_diff))
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_delta))
         message += 'old price:     {:.8f}<br />'.format(old_price)
         message += 'new price:     {:.8f}<br />'.format(new_price)
         message += 'percent_limit: {}%<br />'.format(percent_limit)

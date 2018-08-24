@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''my_monitor.py for monitoring binance and bittrex price fluctuations.
+'''This program monitors crypto exchanges price fluctuation.
 
 Usage:
     ./my_monitor.py &
@@ -8,7 +8,6 @@ Stop the program:
     $ ps -e | grep monitor
      1828 pts/8    00:00:00 my_monitor.py
     $ kill -9 1828
-
 '''
 import datetime
 import logging
@@ -39,18 +38,40 @@ handler.setFormatter(formatter)
 log = logging.getLogger(__name__)
 all_loggers.addHandlerToAllLoggers(handler)
 all_loggers.setLevelToAllLoggers(logging.INFO)
-log.info('Logging started...')
 
 if __name__ == '__main__':
     try:
-        binance = api.Binance(number_of_prices_to_track=300)
-        binance.start()
+        log.info('Logging started...')
+        threads = []
+        threads.append(api.Binance(number_of_prices_to_track=300))
+        threads.append(api.Bittrex(number_of_prices_to_track=300))
+        
+        # Start all threads
+        for t in threads:
+            t.start()
 
-        bittrex = api.Bittrex(number_of_prices_to_track=300)
-        bittrex.start()
+        # Wait for some exception to happen
+        old_time = datetime.datetime.now()
+        while True:
+            new_time = datetime.datetime.now()
+            time_delta = new_time - old_time
+            if time_delta.seconds > 600:
+                log.info('Still going...')
+                old_time = new_time
+    except KeyboardInterrupt:
+        # https://helpful.knobs-dials.com/index.php/Python_notes_-_threads/threading#Timely_thread_cleanup.2C_and_getting_Ctrl-C_to_work
+        log.warning('Ctrl-C entered.')
     except Exception as e:
         # Catch all python exceptions occurred in the main thread to log for
         # troubleshooting purposes, since this monitor is intended to run in
         # the background
         log.error('Something nasty happened in my_monitor!')
         log.exception(e.message)
+    finally:
+        log.info('Stopping all threads!')
+
+        # Stop and wait for threads to finish
+        for t in threads:
+            t.stop = True
+            t.join()
+        log.info('Logging ended...')
