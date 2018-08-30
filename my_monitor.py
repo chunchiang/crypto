@@ -14,6 +14,7 @@ import logging
 import logging.config
 import os
 import sys
+import threading
 
 # Include the project package into the system path to allow import
 package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,23 +51,34 @@ if __name__ == '__main__':
         for t in threads:
             t.start()
 
-        # Wait for some exception to happen
+        # Monitor child threads in case exceptions happen
         old_time = datetime.datetime.now()
         while True:
+            # Display the threads that are still running every 10 minutes
             new_time = datetime.datetime.now()
             time_delta = new_time - old_time
             if time_delta.seconds > 600:
-                log.info('Still going...')
+                running_threads = ''
+                for t in threads:
+                    if t.is_alive():
+                        if running_threads:
+                            running_threads += ', '
+                        running_threads += t.exchange
+                log.info('{0} still running...'.format(running_threads))
+                # log.info('Still running...')
                 old_time = new_time
     except KeyboardInterrupt:
-        # https://helpful.knobs-dials.com/index.php/Python_notes_-_threads/threading#Timely_thread_cleanup.2C_and_getting_Ctrl-C_to_work
+        # Reference: https://helpful.knobs-dials.com/index.php/Python_notes_-_threads/threading#Timely_thread_cleanup.2C_and_getting_Ctrl-C_to_work
         log.warning('Ctrl-C entered.')
     except Exception as e:
         # Catch all python exceptions occurred in the main thread to log for
         # troubleshooting purposes, since this monitor is intended to run in
         # the background
-        log.error('Something nasty happened in my_monitor!')
+        log.error('Exception happened in my_monitor!')
         log.exception(e.message)
+    except:
+        # Reference: https://stackoverflow.com/questions/18982610/difference-between-except-and-except-exception-as-e-in-python
+        log.error('Something nasty happened in my_monitor!')
     finally:
         log.info('Stopping all threads!')
 

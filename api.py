@@ -29,7 +29,7 @@ import logging
 import os
 import smtplib
 import sys
-import threading
+import thread, threading
 import time
 import urllib2
 from collections import deque
@@ -116,7 +116,9 @@ class API(threading.Thread):
                         new_price_time = p_time[min_price_index]
 
                     # Calculate price fluctuation
-                    percent_diff = (new_price / old_price - 1) * 100
+                    percent_diff = 0
+                    if old_price:
+                        percent_diff = (new_price / old_price - 1) * 100
                     # new_price_time = new_price_time.replace(microsecond=0)  # Do not display microsecond
                     # old_price_time = old_price_time.replace(microsecond=0)  # Do not display microsecond
                     time_delta = new_price_time - old_price_time
@@ -141,8 +143,14 @@ class API(threading.Thread):
             # Catch all python exceptions occurred in the main thread to log for
             # troubleshooting purposes, since this class is intended to run in
             # the background
-            log.error('Something nasty happened in thread {}!'.format(self.exchange))
+            log.error('Exception happened in thread {}!'.format(self.exchange))
             log.exception(e.message)
+            
+            # Send Ctrl-C to main thread when exception happens in child thread
+            thread.interrupt_main()
+        except:
+            # Reference: https://stackoverflow.com/questions/18982610/difference-between-except-and-except-exception-as-e-in-python
+            log.error('Something nasty happened in thread {}!'.format(self.exchange))
             
             # Send Ctrl-C to main thread when exception happens in child thread
             thread.interrupt_main()
