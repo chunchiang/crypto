@@ -85,7 +85,20 @@ class API(threading.Thread):
 
                 # Get new prices
                 log.debug('Get price updates')
-                my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
+                for i in xrange(3):
+                    try:
+                        my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
+                    except urllib2.HTTPError as e:
+                        log.warning('Unable to get price from {0} in {1} try!'.format(self.exchange, i))
+                        log.warning(e.message)
+                        
+                        # Raise HTTP Error if still fails after 3 retries
+                        if i >= 3:
+                            raise
+                            
+                    # Break loop if no HTTPError while getting price 
+                    else:
+                        break
 
                 email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
