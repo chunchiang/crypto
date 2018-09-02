@@ -46,19 +46,21 @@ log = logging.getLogger(__name__)
 
 
 class API(threading.Thread):
-    def __init__(self, url, exchange, my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30, time_limit=0):
+    def __init__(self, url, my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30, time_limit=0):
         '''
         param: url
         param: tickers: a list of tickers to monitor
         param: number_of_prices_to_track: total number of prices to keep track for each ticker
-        param: wait_before_poll: amount of time to wait before each poll (in seconds)
+        param: wait_before_poll: amount of time (in seconds) to wait before each poll
+        param: percent_limit: the percentage change within time_limit before sending out notifications
+        param: time_limit: amount of time back (in seconds) to calculate each price percentage change
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
 
         self.stop = False
         self.url = url
-        self.exchange = exchange
+        self.exchange = self.__class__.__name__
         self.my_tickers = my_tickers
         self.number_of_prices_to_track = number_of_prices_to_track
         self.wait_before_poll = wait_before_poll
@@ -75,6 +77,7 @@ class API(threading.Thread):
     def run(self):
         try:
             log.info('Thread {} started...'.format(self.exchange))
+            print('Thread {} started...'.format(self.exchange))
             while not self.stop:
                 log.debug('Waiting for {}s before next price poll...'.format(self.wait_before_poll))
                 time.sleep(self.wait_before_poll)
@@ -85,18 +88,12 @@ class API(threading.Thread):
 
                 # Get new prices
                 log.debug('Get price updates')
-                for i in xrange(10):
-                    try:
-                        my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
-                    except (urllib2.HTTPError, urllib2.URLError) as e:
-                        # Raise HTTP Error if still fails after 3 retries
-                        if i > 3:
-                            raise
-                        log.warning('Unable to get price from {0} in {1} try!'.format(self.exchange, i))
-                        log.warning(e.message)
-                    # Break loop if no HTTPError while getting price 
-                    else:
-                        break
+                try:
+                    my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
+                except (urllib2.HTTPError, urllib2.URLError) as e:
+                    log.warning('Unable to get price!')
+                    log.warning(e.message)
+                    continue  # Skip the rest of the loop below and poll again
 
                 email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
@@ -167,13 +164,14 @@ class API(threading.Thread):
             thread.interrupt_main()
         finally:
             log.info('Thread {} ended...'.format(self.exchange))
+            print('Thread {} ended...'.format(self.exchange))
 
     def get_prices(self, all_tickers, ticker_key, price_key, my_tickers=None):
         '''Get all prices from URL specified in the class
 
-        param: ticker_key
-        param: price_key
         param: all_tickers: a list of all the tickers in dictionary form with at least ticker and price key value pair
+        param: ticker_key: name used to indicate the ticker field
+        param: price_key: name used to indicate the price field
         param: my_tickers: tickers of interest
         '''
         if isinstance(all_tickers, str):
@@ -184,7 +182,7 @@ class API(threading.Thread):
         for t in all_tickers:
             # Track the prices for all tickers
             # log.debug('{} {}'.format(t[ticker_key], t[price_key]))
-            if not t[price_key]:
+            if price_key not in t.keys() or not t[price_key] or t[price_key] == 'N/A':
                 t[price_key] = 0
             if t[ticker_key] in self.tickers_price_history.keys():
                 if not self.tickers_price_history[t[ticker_key]] or not float(t[price_key]) == self.tickers_price_history[t[ticker_key]][-1]:
@@ -349,8 +347,8 @@ class API(threading.Thread):
 
 
 class Binance(API):
-    def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', exchange='Binance', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
-        super(Binance, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+    def __init__(self, url='https://api.binance.com/api/v1/ticker/allPrices', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
+        super(Binance, self).__init__(url, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
@@ -360,7 +358,9 @@ class Binance(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        return super(Binance, self).get_prices(json.loads(urllib2.urlopen(self.url).read()), 'symbol', 'price', my_tickers=my_tickers)
+            
+        all_tickers = json.loads(urllib2.urlopen(self.url).read())
+        return super(Binance, self).get_prices(all_tickers, 'symbol', 'price', my_tickers=my_tickers)
 
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
         '''Compose email message.'''
@@ -384,8 +384,8 @@ class Binance(API):
 
 
 class Bittrex(API):
-    def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', exchange='Bittrex', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
-        super(Bittrex, self).__init__(url, exchange, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+    def __init__(self, url='https://bittrex.com/api/v1.1/public/getmarketsummaries', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
+        super(Bittrex, self).__init__(url, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
 
     def get_prices(self, my_tickers=None):
         '''Get all prices from URL specified in the class
@@ -397,7 +397,9 @@ class Bittrex(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-        return super(Bittrex, self).get_prices(json.loads(urllib2.urlopen(self.url).read())['result'], 'MarketName', 'Last', my_tickers=my_tickers)
+            
+        all_tickers = json.loads(urllib2.urlopen(self.url).read())['result']
+        return super(Bittrex, self).get_prices(all_tickers, 'MarketName', 'Last', my_tickers=my_tickers)
 
     def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
         '''Compose email message.'''
@@ -413,3 +415,88 @@ class Bittrex(API):
         # message += '    '  # Spaces after the message are needed for display purposes when text is received
         message += '<br />'
         return message
+
+
+class Idex(API):
+    def __init__(self, url='https://api.idex.market/returnTicker', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
+        super(Idex, self).__init__(url, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+
+    def get_prices(self, my_tickers=None):
+        '''Get all prices from URL specified in the class
+
+        URL for getting all ticker prices
+        Reference: https://stackoverflow.com/questions/17178483/how-do-you-send-an-http-get-web-request-in-python
+
+        param: my_tickers
+        '''
+        if isinstance(my_tickers, str):
+            my_tickers = [my_tickers]
+            
+        # Reference: https://stackoverflow.com/questions/13303449/urllib2-httperror-http-error-403-forbidden
+        req = urllib2.Request(self.url, headers={
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+            'Accept-Encoding': 'none',
+            'Accept-Language': 'en-US,en;q=0.8',
+            'Connection': 'keep-alive'}
+        )
+        all_tickers = []
+        for key, value in json.loads(urllib2.urlopen(req).read()).iteritems():
+            value['symbol'] = key
+            all_tickers.append(value)
+        return super(Idex, self).get_prices(all_tickers, 'symbol', 'last', my_tickers=my_tickers)
+
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
+        '''Compose email message.'''
+        message = super(Idex, self).compose_message(ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose)
+
+        color = 'green' if percent_diff > 0 else 'red'
+        message += 'https://idex.market/{}<br />'.format(ticker.replace('_', '/'))
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_delta))
+        message += 'old price:     {:.8f}<br />'.format(old_price)
+        message += 'new price:     {:.8f}<br />'.format(new_price)
+        message += 'percent_limit: {}%<br />'.format(percent_limit)
+        message += 'Time sent:     {}<br />'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
+        # message += '    '  # Spaces after the message are needed for display purposes when text is received
+        message += '<br />'
+        return message
+
+
+class Kucoin(API):
+    def __init__(self, url='https://api.kucoin.com/v1/open/tick', my_tickers=None, number_of_prices_to_track=30, wait_before_poll=10, percent_limit=30):
+        super(Kucoin, self).__init__(url, my_tickers, number_of_prices_to_track, wait_before_poll, percent_limit)
+
+    def get_prices(self, my_tickers=None):
+        '''Get all prices from URL specified in the class
+
+        URL for getting all ticker prices
+        Reference: https://stackoverflow.com/questions/17178483/how-do-you-send-an-http-get-web-request-in-python
+
+        param: my_tickers
+        '''
+        if isinstance(my_tickers, str):
+            my_tickers = [my_tickers]
+
+        all_tickers = json.loads(urllib2.urlopen(self.url).read())['data']
+        return super(Kucoin, self).get_prices(all_tickers, 'symbol', 'lastDealPrice', my_tickers=my_tickers)
+
+    def compose_message(self, ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose=False):
+        '''Compose email message.'''
+        message = super(Kucoin, self).compose_message(ticker, percent_diff, old_price, new_price, time_delta, percent_limit, verbose)
+
+        color = 'green' if percent_diff > 0 else 'red'
+        message += 'https://www.kucoin.com/#/trade.pro/{}<br />'.format(ticker)
+        message += '{}: <font color="{}">{:+.2f}%</font> in {}<br />'.format(ticker, color, percent_diff, str(time_delta))
+        message += 'old price:     {:.8f}<br />'.format(old_price)
+        message += 'new price:     {:.8f}<br />'.format(new_price)
+        message += 'percent_limit: {}%<br />'.format(percent_limit)
+        message += 'Time sent:     {}<br />'.format(datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p'))
+        # message += '    '  # Spaces after the message are needed for display purposes when text is received
+        message += '<br />'
+        return message
+
+
+if __name__ == '__main__':
+    k = Kucoin()
+    print(k.get_prices())

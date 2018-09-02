@@ -46,6 +46,8 @@ if __name__ == '__main__':
         threads = []
         threads.append(api.Binance(number_of_prices_to_track=300))
         threads.append(api.Bittrex(number_of_prices_to_track=300))
+        threads.append(api.Idex(number_of_prices_to_track=300))
+        threads.append(api.Kucoin(number_of_prices_to_track=300))
         
         # Start all threads
         for t in threads:
@@ -70,6 +72,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         # Reference: https://helpful.knobs-dials.com/index.php/Python_notes_-_threads/threading#Timely_thread_cleanup.2C_and_getting_Ctrl-C_to_work
         log.warning('Ctrl-C entered.')
+        print('Ctrl-C entered.')
     except Exception as e:
         # Catch all python exceptions occurred in the main thread to log for
         # troubleshooting purposes, since this monitor is intended to run in
@@ -81,6 +84,7 @@ if __name__ == '__main__':
         log.error('Something nasty happened in my_monitor!')
     finally:
         log.info('Stopping all threads!')
+        print('Stopping all threads!')
 
         # Stop and wait for threads to finish
         for t in threads:
