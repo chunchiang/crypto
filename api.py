@@ -24,6 +24,7 @@ Configure logging to allow change dynamically
 https://docs.python.org/2/howto/logging.html#configuring-logging
 '''
 import datetime
+import httplib
 import json
 import logging
 import os
@@ -90,7 +91,7 @@ class API(threading.Thread):
                 log.debug('Get price updates')
                 try:
                     my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
-                except (urllib2.HTTPError, urllib2.URLError) as e:
+                except (httplib.BadStatusLine, urllib2.HTTPError, urllib2.URLError) as e:
                     log.warning('Unable to get price!')
                     log.warning(e.message)
                     continue  # Skip the rest of the loop below and poll again
@@ -497,6 +498,12 @@ class Kucoin(API):
         return message
 
 
-if __name__ == '__main__':
+def main():
+    '''Test new code here.  The actual monitor is ran in my_monitor.py'''
     k = Kucoin()
     print(k.get_prices())
+
+
+if __name__ == '__main__':
+    main()
+

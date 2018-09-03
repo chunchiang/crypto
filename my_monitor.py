@@ -8,6 +8,8 @@ Stop the program:
     $ ps -e | grep monitor
      1828 pts/8    00:00:00 my_monitor.py
     $ kill -9 1828
+
+TODO: Add to start/stop thread without having to start/stop my_monitor.
 '''
 import datetime
 import logging
@@ -40,7 +42,8 @@ log = logging.getLogger(__name__)
 all_loggers.addHandlerToAllLoggers(handler)
 all_loggers.setLevelToAllLoggers(logging.INFO)
 
-if __name__ == '__main__':
+
+def main():
     try:
         log.info('Logging started...')
         threads = []
@@ -91,3 +94,8 @@ if __name__ == '__main__':
             t.stop = True
             t.join()
         log.info('Logging ended...')
+
+
+if __name__ == '__main__':
+    main()
+
