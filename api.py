@@ -92,11 +92,9 @@ class API(threading.Thread):
                 try:
                     my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
                 except (httplib.BadStatusLine, urllib2.HTTPError, urllib2.URLError) as e:
-                    log.warning('Unable to get price!')
-                    log.warning(e.message)
+                    log.warning('Unable to get price from exchange!')
                     continue  # Skip the rest of the loop below and poll again
 
-                email_content = ''
                 for t, p in my_tickers_price_history.iteritems():
                     # Convert collections.deque to list
                     p = list(p)
@@ -135,19 +133,18 @@ class API(threading.Thread):
                     if abs(percent_diff) > self.percent_limit:
                         if not self.time_limit or (time_delta.days == 0 and time_delta.seconds < self.time_limit):
                             # Compose all the messages into email content
-                            email_content += self.compose_message(t, percent_diff, old_price, new_price, time_delta, self.config['percent_limit'], self.verbose)
+                            email_content = self.compose_message(t, percent_diff, old_price, new_price, time_delta, self.config['percent_limit'], self.verbose)
+                            log.debug(email_content)
+                            if 'email' in self.config.keys():
+                                self.send_email(self.config['email'].strip(), '{} Update'.format(self.exchange), email_content)
+                                time.sleep(.01)
+                            else:
+                                log.warning('No email provided in the {}.ini'.format(self.exchange))
 
                             # Clear the ticker prices to start fresh to prevent script from keep sending message
                             self.tickers_price_history[t].clear()
                             self.price_time[t].clear()
 
-                if email_content:
-                    log.debug(email_content)
-                    if 'email' in self.config.keys():
-                        self.send_email(self.config['email'].strip(), '{} Update'.format(self.exchange), email_content)
-                        time.sleep(.01)
-                    else:
-                        log.warning('No email provided in the {}.ini'.format(self.exchange))
         except Exception as e:
             # Catch all python exceptions occurred in the main thread to log for
             # troubleshooting purposes, since this class is intended to run in
@@ -506,4 +503,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
