@@ -91,7 +91,7 @@ class API(threading.Thread):
                 log.debug('Get price updates')
                 try:
                     my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
-                except (httplib.BadStatusLine, urllib2.HTTPError, urllib2.URLError) as e:
+                except (httplib.BadStatusLine, httplib.IncompleteRead, urllib2.HTTPError, urllib2.URLError) as e:
                     log.warning('Unable to get price from exchange!')
                     continue  # Skip the rest of the loop below and poll again
 
