@@ -4,10 +4,10 @@
 Usage:
     Running in terminal session (must keep the session open, if session is closed, the program stops)
     $ ./my_monitor.py
-    
+
     Running in the backgound
     Reference: https://stackoverflow.com/questions/2975624/how-to-run-a-python-script-in-the-background-even-after-i-logout-ssh
-    $ nohup ./my_monitor.py &
+    $
 
     Stop the program:
     $ ps -e | grep monitor
@@ -15,6 +15,7 @@ Usage:
     $ kill -9 1828
 
 TODO: Add to start/stop thread without having to start/stop my_monitor.
+TODO: Figure out why it takes so long (> 2 mins) for email to be sent.
 '''
 import datetime
 import logging
@@ -50,13 +51,13 @@ all_loggers.setLevelToAllLoggers(logging.INFO)
 
 def main():
     try:
-        log.info('Logging started...')
+        log.info('{0} started as PID {1}...'.format(this_filename, os.getpid()))
         threads = []
         threads.append(api.Binance(number_of_prices_to_track=300))
         threads.append(api.Bittrex(number_of_prices_to_track=300))
         threads.append(api.Idex(number_of_prices_to_track=300))
         threads.append(api.Kucoin(number_of_prices_to_track=300))
-        
+
         # Start all threads
         for t in threads:
             t.start()
@@ -98,7 +99,7 @@ def main():
         for t in threads:
             t.stop = True
             t.join()
-        log.info('Logging ended...')
+        log.info('{0} ended...'.format(this_filename))
 
 
 if __name__ == '__main__':
