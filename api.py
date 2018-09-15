@@ -176,19 +176,20 @@ class API(threading.Thread):
             all_tickers = [all_tickers]
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-
-        for t in all_tickers:
-            # Track the prices for all tickers
-            # log.debug('{} {}'.format(t[ticker_key], t[price_key]))
-            if price_key not in t.keys() or not t[price_key] or t[price_key] == 'N/A':
-                t[price_key] = 0
-            if t[ticker_key] in self.tickers_price_history.keys():
-                if not self.tickers_price_history[t[ticker_key]] or not float(t[price_key]) == self.tickers_price_history[t[ticker_key]][-1]:
-                    self.tickers_price_history[t[ticker_key]].append(float(t[price_key]))
-                    self.price_time[t[ticker_key]].append(datetime.datetime.now())
-            else:
-                self.tickers_price_history[t[ticker_key]] = deque([float(t[price_key])], self.number_of_prices_to_track)
-                self.price_time[t[ticker_key]] = deque([datetime.datetime.now()], self.number_of_prices_to_track)
+            
+        if all_tickers:
+            for t in all_tickers:
+                # Track the prices for all tickers
+                # log.debug('{} {}'.format(t[ticker_key], t[price_key]))
+                if price_key not in t.keys() or not t[price_key] or t[price_key] == 'N/A':
+                    t[price_key] = 0
+                if t[ticker_key] in self.tickers_price_history.keys():
+                    if not self.tickers_price_history[t[ticker_key]] or not float(t[price_key]) == self.tickers_price_history[t[ticker_key]][-1]:
+                        self.tickers_price_history[t[ticker_key]].append(float(t[price_key]))
+                        self.price_time[t[ticker_key]].append(datetime.datetime.now())
+                else:
+                    self.tickers_price_history[t[ticker_key]] = deque([float(t[price_key])], self.number_of_prices_to_track)
+                    self.price_time[t[ticker_key]] = deque([datetime.datetime.now()], self.number_of_prices_to_track)
 
         if my_tickers:
             # Get only tickers that match my_tickers
