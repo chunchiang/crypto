@@ -7,7 +7,7 @@ Usage:
 
     Running in the backgound
     Reference: https://stackoverflow.com/questions/2975624/how-to-run-a-python-script-in-the-background-even-after-i-logout-ssh
-    $
+    $ nohup ./my_monitor.py &
 
     Stop the program:
     $ ps -e | grep monitor
@@ -104,4 +104,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

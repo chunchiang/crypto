@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import smtplib
+import socket
 import sys
 import thread, threading
 import time
@@ -73,6 +74,11 @@ class API(threading.Thread):
         self.tickers_price_history = {}
         self.price_time = {}
 
+        # Get gmail authentication from environmental variables
+        # Make sure to set GMAIL and GMAIL_PASS in the .bashrc
+        self.gmail = os.environ['GMAIL']
+        self.gmail_password = os.environ['GMAIL_PASS']
+
         threading.Thread.__init__(self, name=self.exchange)
 
     def run(self):
@@ -91,8 +97,8 @@ class API(threading.Thread):
                 log.debug('Get price updates')
                 try:
                     my_tickers_price_history, my_price_time = self.get_prices(self.my_tickers)
-                except (httplib.BadStatusLine, httplib.IncompleteRead, urllib2.HTTPError, urllib2.URLError) as e:
-                    log.warning('Unable to get price from exchange!')
+                except (httplib.BadStatusLine, httplib.IncompleteRead, socket.error, urllib2.HTTPError, urllib2.URLError) as e:
+                    log.warning('Unable to get price from exchange because of {0}!'.format(e.__class__.__name__))
                     continue  # Skip the rest of the loop below and poll again
 
                 for t, p in my_tickers_price_history.iteritems():
@@ -101,6 +107,10 @@ class API(threading.Thread):
                     # log.debug(p)
                     p_time = list(self.price_time[t])
                     # log.debug(p_time)
+                    
+                    # Go to next item if no price in the ticker
+                    if not p:
+                        continue
 
                     # Get min and max price index in each ticker's prices
                     min_price_index = len(p) - 1 - p[::-1].index(min(p))
@@ -151,13 +161,13 @@ class API(threading.Thread):
             # the background
             log.error('Exception happened in thread {}!'.format(self.exchange))
             log.exception(e.message)
-            
+
             # Send Ctrl-C to main thread when exception happens in child thread
             thread.interrupt_main()
         except:
             # Reference: https://stackoverflow.com/questions/18982610/difference-between-except-and-except-exception-as-e-in-python
             log.error('Something nasty happened in thread {}!'.format(self.exchange))
-            
+
             # Send Ctrl-C to main thread when exception happens in child thread
             thread.interrupt_main()
         finally:
@@ -176,7 +186,7 @@ class API(threading.Thread):
             all_tickers = [all_tickers]
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-            
+
         if all_tickers:
             for t in all_tickers:
                 # Track the prices for all tickers
@@ -207,7 +217,7 @@ class API(threading.Thread):
     def import_config(self, filename):
         # Import config from .ini
         config = {}
-        
+
         if os.path.exists(filename):
             with open(filename, 'r') as f:
                 for line in f:
@@ -312,14 +322,9 @@ class API(threading.Thread):
 
     def send_email(self, to, subject, message):
         try:
-            # Get gmail authentication from environmental variables
-            # Make sure to set GMAIL and GMAIL_PASS in the .bashrc
-            email = os.environ['GMAIL']
-            password = os.environ['GMAIL_PASS']
-
             # Compose email
             msg = MIMEMultipart()
-            msg['From'] = email
+            msg['From'] = self.gmail
             msg['To'] = to
             msg['Subject'] = subject
             # msg.attach(MIMEText(message, 'plain'))
@@ -327,17 +332,20 @@ class API(threading.Thread):
 
             # Establish a secure session with gmail's outgoing SMTP server using your gmail account
             # Reference: http://stackabuse.com/how-to-send-emails-with-gmail-using-python/
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(email, password)
+            log.info('Establish connection to gmail.')
+            smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            smtp_server.ehlo()
 
-            # Send text message through SMS gateway of destination number
-            server.sendmail(msg['From'], msg['To'], msg.as_string())
-            server.quit()
-            
+            # Send emails, depends on where it is sending emails from, firewall
+            # may cause it to take very long or fail to send emails
+            # Reference: https://stackoverflow.com/questions/40998160/python3-smtplib-creating-the-smtp-server-obj-is-very-slow
+            log.info('Login and send email.')
+            smtp_server.login(self.gmail, self.gmail_password)
+            smtp_server.sendmail(msg['From'], msg['To'], msg.as_string())
             log.info('Sent email to {}.'.format(to))
+            
+            # Quit SMTP server connection
+            smtp_server.quit()
         except KeyError as e:
             log.warning('{} missing "From" email information in environmental variables, skip sending email!'.format(e))
         except Exception as e:
@@ -357,7 +365,7 @@ class Binance(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-            
+
         all_tickers = json.loads(urllib2.urlopen(self.url).read())
         return super(Binance, self).get_prices(all_tickers, 'symbol', 'price', my_tickers=my_tickers)
 
@@ -396,7 +404,7 @@ class Bittrex(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-            
+
         all_tickers = json.loads(urllib2.urlopen(self.url).read())['result']
         return super(Bittrex, self).get_prices(all_tickers, 'MarketName', 'Last', my_tickers=my_tickers)
 
@@ -430,7 +438,7 @@ class Idex(API):
         '''
         if isinstance(my_tickers, str):
             my_tickers = [my_tickers]
-            
+
         # Reference: https://stackoverflow.com/questions/13303449/urllib2-httperror-http-error-403-forbidden
         req = urllib2.Request(self.url, headers={
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
