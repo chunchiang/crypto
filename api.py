@@ -76,8 +76,8 @@ class API(threading.Thread):
 
         # Get gmail authentication from environmental variables
         # Make sure to set GMAIL and GMAIL_PASS in the .bashrc
-        self.gmail = os.environ['GMAIL']
-        self.gmail_password = os.environ['GMAIL_PASS']
+        self.gmail = os.environ.get('GMAIL')
+        self.gmail_password = os.environ.get('GMAIL_PASS')
 
         threading.Thread.__init__(self, name=self.exchange)
 
@@ -321,6 +321,9 @@ class API(threading.Thread):
         return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
     def send_email(self, to, subject, message):
+        if not self.gmail or not self.gmail_password:
+            log.warning('{} missing "From" email information in environmental variables, skip sending email!'.format(e))
+            return
         try:
             # Compose email
             msg = MIMEMultipart()
@@ -346,10 +349,8 @@ class API(threading.Thread):
             
             # Quit SMTP server connection
             smtp_server.quit()
-        except KeyError as e:
-            log.warning('{} missing "From" email information in environmental variables, skip sending email!'.format(e))
         except Exception as e:
-            log.warning('Unable to send email!')
+            log.warning('Unexpected error occurred, unable to send email!')
             log.exception(e.message)
 
 

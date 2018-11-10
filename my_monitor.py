@@ -56,7 +56,7 @@ def main():
         threads.append(api.Binance(number_of_prices_to_track=300))
         threads.append(api.Bittrex(number_of_prices_to_track=300))
         threads.append(api.Idex(number_of_prices_to_track=300))
-        threads.append(api.Kucoin(number_of_prices_to_track=300))
+        #threads.append(api.Kucoin(number_of_prices_to_track=300))
 
         # Start all threads
         for t in threads:
@@ -65,10 +65,11 @@ def main():
         # Monitor child threads in case exceptions happen
         old_time = datetime.datetime.now()
         while True:
-            # Display the threads that are still running every 10 minutes
+            # Display the threads that are still running every 60 minutes
+            time_interval_to_display = 60 * 60
             new_time = datetime.datetime.now()
             time_delta = new_time - old_time
-            if time_delta.seconds > 600:
+            if time_delta.seconds > time_interval_to_display:
                 running_threads = ''
                 for t in threads:
                     if t.is_alive():
