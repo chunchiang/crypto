@@ -19,7 +19,6 @@ TODO: Figure out why it takes so long (> 2 mins) for email to be sent.
 '''
 import datetime
 import logging
-import logging.config
 import os
 import sys
 import threading
@@ -30,26 +29,17 @@ sys.path.insert(0, package_path)
 
 # Import your package (if any) below
 import api
-from lib import all_loggers
+import lib.util
 
-# Create log directory to store all logs for current UUT
-log_dir = 'logs'
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir, 0755)  # Equivalent to mkdir -p
-
-# Initialize loggers
-this_filename = os.path.basename(__file__).split('.')[0]
-# filename = '~/{0}/{1}/{1}_{2}.log'.format(log_dir, this_filename, datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''))
-filename = '{}/{}_{}.log'.format(log_dir, this_filename, datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''))
-handler = logging.FileHandler(filename)
-formatter = logging.Formatter('%(asctime)s %(name)-8s %(threadName)-10s %(levelname)-8s %(message)s')
-handler.setFormatter(formatter)
 log = logging.getLogger(__name__)
-all_loggers.addHandlerToAllLoggers(handler)
-all_loggers.setLevelToAllLoggers(logging.INFO)
+this_filename = os.path.basename(__file__).split('.')[0]
 
 
 def main():
+    # Initialize loggers
+    # filename = '{}/{}_{}.log'.format(log_dir, this_filename, datetime.datetime.now().isoformat().replace(':', '').replace('-', '').replace('.', ''))
+    lib.util.log_to_file(log_dir='logs', maxBytes=10*1024*1024, backupCount=5)  # 10*1024*1024 = 10MB
+    
     try:
         log.info('{0} started as PID {1}...'.format(this_filename, os.getpid()))
         threads = []

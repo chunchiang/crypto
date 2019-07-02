@@ -101,7 +101,7 @@ class API(threading.Thread):
                     log.warning('Unable to get price from exchange because of {0}!'.format(e.__class__.__name__))
                     continue  # Skip the rest of the loop below and poll again
 
-                for t, p in my_tickers_price_history.iteritems():
+                for t, p in my_tickers_price_history.items():
                     # Convert collections.deque to list
                     p = list(p)
                     # log.debug(p)
@@ -242,20 +242,19 @@ class API(threading.Thread):
             # Get logging_level, default is INFO
             if 'logging_level' in config.keys():
                 # Set logging level for all loggers
-                from lib import all_loggers
                 if config['logging_level'].upper() == 'DEBUG':
-                    all_loggers.setLevelToAllLoggers(logging.DEBUG)
+                    log.setLevel(logging.DEBUG)
                 elif config['logging_level'].upper() == 'INFO':
-                    all_loggers.setLevelToAllLoggers(logging.INFO)
+                    log.setLevel(logging.INFO)
                 elif config['logging_level'].upper() == 'WARNING':
-                    all_loggers.setLevelToAllLoggers(logging.WARNING)
+                    log.setLevel(logging.WARNING)
                 elif config['logging_level'].upper() == 'ERROR':
-                    all_loggers.setLevelToAllLoggers(logging.ERROR)
+                    log.setLevel(logging.ERROR)
                 elif config['logging_level'].upper() == 'CRITICAL':
-                    all_loggers.setLevelToAllLoggers(logging.CRITICAL)
+                    log.setLevel(logging.CRITICAL)
                 else:
                     # Set to default level
-                    all_loggers.setLevelToAllLoggers(logging.INFO)
+                    log.setLevel(logging.INFO)
 
             # Get my_tickers
             if 'my_tickers' in config.keys():
@@ -335,14 +334,14 @@ class API(threading.Thread):
 
             # Establish a secure session with gmail's outgoing SMTP server using your gmail account
             # Reference: http://stackabuse.com/how-to-send-emails-with-gmail-using-python/
-            log.info('Establish connection to gmail.')
+            #log.info('Establish connection to gmail.')
             smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
             smtp_server.ehlo()
 
             # Send emails, depends on where it is sending emails from, firewall
             # may cause it to take very long or fail to send emails
             # Reference: https://stackoverflow.com/questions/40998160/python3-smtplib-creating-the-smtp-server-obj-is-very-slow
-            log.info('Login and send email.')
+            #log.info('Login and send email.')
             smtp_server.login(self.gmail, self.gmail_password)
             smtp_server.sendmail(msg['From'], msg['To'], msg.as_string())
             log.info('Sent email to {}.'.format(to))
@@ -450,7 +449,7 @@ class Idex(API):
             'Connection': 'keep-alive'}
         )
         all_tickers = []
-        for key, value in json.loads(urllib2.urlopen(req).read()).iteritems():
+        for key, value in json.loads(urllib2.urlopen(req).read()).items():
             value['symbol'] = key
             all_tickers.append(value)
         return super(Idex, self).get_prices(all_tickers, 'symbol', 'last', my_tickers=my_tickers)
